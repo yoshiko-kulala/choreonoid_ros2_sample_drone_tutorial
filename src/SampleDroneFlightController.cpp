@@ -5,8 +5,8 @@
 
 #include <cnoid/AccelerationSensor>
 #include <cnoid/EigenUtil>
+#include <cnoid/Joystick>
 #include <cnoid/SimpleController>
-#include <cnoid/SharedJoystick>
 #include <cnoid/RateGyroSensor>
 #include <cnoid/Rotor>
 #include <rclcpp/rclcpp.hpp>
@@ -14,7 +14,6 @@
 #include <sensor_msgs/msg/battery_state.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include <memory>
-#include <mutex>
 
 class SampleDroneFlightController : public cnoid::SimpleController
 {
@@ -24,7 +23,7 @@ public:
     virtual bool control() override;
 
 private:
-    enum ControlMode { Mode1, Mode2 };
+    enum ControlMode { Mode1, Mode2, Twist };
 
     cnoid::SimpleControllerIO* io;
     cnoid::BodyPtr ioBody;
@@ -42,18 +41,13 @@ private:
     cnoid::Vector2 dxyref;
     cnoid::Vector2 dxyprev;
 
-    cnoid::SharedJoystickPtr joystick;
-
-    std::ostream* os;
-    std::mutex joyMutex;
+    cnoid::Joystick joystick;
 
     int currentMode;
-    int targetMode;
     double timeStep;
     double time;
     double durationn;
-    bool power;
-    bool prevButtonState[2];
+    bool is_powered_on;
 
     rclcpp::Node::SharedPtr node;
     rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr publisher;
@@ -71,6 +65,9 @@ CNOID_IMPLEMENT_SIMPLE_CONTROLLER_FACTORY(SampleDroneFlightController)
 bool SampleDroneFlightController::configure(cnoid::SimpleControllerConfig* config)
 {
     node = std::make_shared<rclcpp::Node>(config->controllerName());
+
+    joyState.axes.resize(cnoid::Joystick::NUM_STD_AXES);
+    joyState.buttons.resize(cnoid::Joystick::NUM_STD_BUTTONS);
 
     publisher = node->create_publisher<sensor_msgs::msg::BatteryState>("battery_status", 10);
     subscription = node->create_subscription<geometry_msgs::msg::Twist>(
@@ -92,11 +89,13 @@ bool SampleDroneFlightController::initialize(cnoid::SimpleControllerIO* io)
     rotors = io->body()->devices();
     gyroSensor = ioBody->findDevice<cnoid::RateGyroSensor>("GyroSensor");
     accSensor = ioBody->findDevice<cnoid::AccelerationSensor>("AccSensor");
-    power = true;
-    currentMode = Mode1;
+    is_powered_on = true;
+    currentMode = Twist;
 
-    prevButtonState[0] = prevButtonState[1] = false;
     for(auto opt : io->options()) {
+        if(opt == "mode1") {
+            currentMode = Mode1;
+        }
         if(opt == "mode2") {
             currentMode = Mode2;
         }
@@ -118,33 +117,14 @@ bool SampleDroneFlightController::initialize(cnoid::SimpleControllerIO* io)
     timeStep = io->timeStep();
     time = durationn = 60.0 * 40.0;
 
-    os = &io->os();
-
-    joystick = io->getOrCreateSharedObject<cnoid::SharedJoystick>("joystick");
-    targetMode = joystick->addMode();
-
     return true;
 }
 
 bool SampleDroneFlightController::control()
 {
+    joystick.readCurrentState();
+
     executor->spin_some();
-
-    static const int buttonID[] = { cnoid::Joystick::A_BUTTON, cnoid::Joystick::B_BUTTON };
-
-    joystick->updateState(targetMode);
-
-    for(int i = 0; i < 2; ++i) {
-        bool currentState = joystick->getButtonState(targetMode, buttonID[i]);
-        if(currentState && !prevButtonState[i]) {
-            if(i == 0) {
-                power = !power;
-            } else if(i == 1) {
-                currentMode = currentMode == Mode1 ? Mode2 : Mode1;
-            }
-        }
-        prevButtonState[i] = currentState;
-    }
 
     static const int modeID[][4] = {
         { cnoid::Joystick::R_STICK_V_AXIS, cnoid::Joystick::R_STICK_H_AXIS, cnoid::Joystick::L_STICK_V_AXIS, cnoid::Joystick::L_STICK_H_AXIS },
@@ -155,7 +135,7 @@ bool SampleDroneFlightController::control()
     for(int i = 0; i < 4; ++i) {
         if(currentMode == Mode1) {
             axisID[i] = modeID[0][i];
-        } else {
+        } else if(currentMode == Mode2) {
             axisID[i] = modeID[1][i];
         }            
     }
@@ -186,10 +166,10 @@ bool SampleDroneFlightController::control()
     double gfcoef = ioBody->mass() * dv[2] / 4.0 / cc ;
 
     if((fabs(cnoid::degree(z[1])) > 45.0) || (fabs(cnoid::degree(z[2])) > 45.0)) {
-        power = false;
+        is_powered_on = false;
     }
 
-    if(!power) {
+    if(!is_powered_on) {
         zref[0] = 0.0;
         dzref[0] = 0.0;
     }
@@ -202,9 +182,19 @@ bool SampleDroneFlightController::control()
     static const double KD[] = {  1.0,  1.0 };
     static const double KX[] = { -2.0, -2.0 };
 
+    joyState.axes[0] = command.linear.z * -1.0;
+    joyState.axes[1] = command.linear.y * -1.0;
+    joyState.axes[2] = command.linear.x * -1.0;
+    joyState.axes[3] = command.angular.z * -1.0;
+
     double pos[4];
     for(int i = 0; i < 4; ++i) {
-        pos[i] = joystick->getPosition(targetMode, axisID[i]);
+        if(currentMode == Twist) {
+            pos[i] = joyState.axes[i];
+        } else {
+            pos[i] = joystick.getPosition(axisID[i]);
+        }
+
         if(fabs(pos[i]) < 0.2) {
             pos[i] = 0.0;
         }
@@ -243,7 +233,7 @@ bool SampleDroneFlightController::control()
     for(size_t i = 0; i < rotors.size(); ++i) {
         cnoid::Rotor* rotor = rotors[i];
         double force = 0.0;
-        if(power) {
+        if(is_powered_on) {
             force += gfcoef;
             force += sign[i][0] * f[0];
             force += sign[i][1] * f[1];
@@ -255,10 +245,9 @@ bool SampleDroneFlightController::control()
         rotor->notifyStateChange();
     }
 
-    if(power) {
+    if(is_powered_on) {
         time -= timeStep;
     }
-    // (*os) << time << std::endl;
     double percentage = time / durationn * 100.0;
 
     auto message = sensor_msgs::msg::BatteryState();
@@ -267,7 +256,7 @@ bool SampleDroneFlightController::control()
     publisher->publish(message);
 
     if(percentage <= 0.0) {
-        power = false;
+        is_powered_on = false;
     }
 
     return true;
