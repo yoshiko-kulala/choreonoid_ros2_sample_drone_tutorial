@@ -1,5 +1,5 @@
-choreonoid_add_simple_controller(
-    TwistTopicSubscriberController TwistTopicSubscriberController.cpp)
+choreonoid_add_drone_controller(
+    SampleDroneFlightController SampleDroneFlightController.cpp)
 
 ament_target_dependencies(
-    TwistTopicSubscriberController rclcpp geometry_msgs sensor_msgs)
+    SampleDroneFlightController rclcpp geometry_msgs sensor_msgs)
