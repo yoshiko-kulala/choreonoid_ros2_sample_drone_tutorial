@@ -34,3 +34,5 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
+
+install(DIRECTORY project launch model DESTINATION share/${PROJECT_NAME})
