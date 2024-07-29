@@ -53,8 +53,20 @@ items:
                 base_directory: "Controller directory"
                 reloading: false
                 export_symbols: false
+            -
+              id: 4
+              name: "TwistPubController"
+              plugin: Body
+              class: SimpleControllerItem
+              data:
+                isNoDelayMode: false
+                controllerOptions: ""
+                controller: "TwistPublisherController"
+                base_directory: "Controller directory"
+                reloading: false
+                export_symbols: false
         -
-          id: 4
+          id: 5
           name: "Floor"
           plugin: Body
           class: BodyItem
@@ -79,7 +91,7 @@ items:
             scene_sensitive: true
             zmp: [ 0, 0, 0 ]
         -
-          id: 5
+          id: 6
           name: "AISTSimulator"
           plugin: Body
           class: AISTSimulatorItem
@@ -112,14 +124,14 @@ items:
             oldAccelSensorMode: false
           children:
             -
-              id: 6
+              id: 7
               name: "CFDSimulator"
               plugin: CFD
               class: CFDSimulatorItem
               data:
                 enabled: true
         -
-          id: 7
+          id: 8
           name: "MultiCollider"
           plugin: SimpleCollider
           class: MultiColliderItem
@@ -172,7 +184,7 @@ views:
     class: ItemTreeView
     mounted: true
     state:
-      expanded: [ 1, 2, 5 ]
+      expanded: [ 1, 2, 6 ]
   -
     id: 3
     plugin: Base
@@ -336,7 +348,7 @@ Body:
         show_cm_projection: false
         show_zmp: false
       -
-        body_item: 4
+        body_item: 5
         show_cm: false
         show_cm_projection: false
         show_zmp: false

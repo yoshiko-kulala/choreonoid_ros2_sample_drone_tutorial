@@ -14,6 +14,8 @@
 #include <sensor_msgs/msg/battery_state.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include <memory>
+#include <thread>
+#include <mutex>
 
 class SampleDroneFlightController : public cnoid::SimpleController
 {
@@ -21,6 +23,7 @@ public:
     virtual bool configure(cnoid::SimpleControllerConfig* config) override;
     virtual bool initialize(cnoid::SimpleControllerIO* io) override;
     virtual bool control() override;
+    virtual void unconfigure() override;
 
 private:
     enum ControlMode { Mode1, Mode2, Twist };
@@ -55,6 +58,9 @@ private:
     geometry_msgs::msg::Twist command;
     sensor_msgs::msg::Joy joyState;
     rclcpp::executors::StaticSingleThreadedExecutor::UniquePtr executor;
+    std::thread executorThread;
+    std::mutex commandMutex;
+    std::mutex batteryMutex;
 
     cnoid::Vector4 getZRPY();
     cnoid::Vector2 getXY();
@@ -69,15 +75,17 @@ bool SampleDroneFlightController::configure(cnoid::SimpleControllerConfig* confi
     joyState.axes.resize(cnoid::Joystick::NUM_STD_AXES);
     joyState.buttons.resize(cnoid::Joystick::NUM_STD_BUTTONS);
 
-    publisher = node->create_publisher<sensor_msgs::msg::BatteryState>("battery_status", 10);
+    publisher = node->create_publisher<sensor_msgs::msg::BatteryState>("/battery_status", 10);
     subscription = node->create_subscription<geometry_msgs::msg::Twist>(
         "/cmd_vel", 1,
         [this](const geometry_msgs::msg::Twist::SharedPtr msg){
+            std::lock_guard<std::mutex> lock(commandMutex);
             command = *msg;
         });
 
     executor = std::make_unique<rclcpp::executors::StaticSingleThreadedExecutor>();
     executor->add_node(node);
+    executorThread = std::thread([this](){ executor->spin(); });
 
     return true;
 }
@@ -123,8 +131,6 @@ bool SampleDroneFlightController::initialize(cnoid::SimpleControllerIO* io)
 bool SampleDroneFlightController::control()
 {
     joystick.readCurrentState();
-
-    executor->spin_some();
 
     static const int modeID[][4] = {
         { cnoid::Joystick::R_STICK_V_AXIS, cnoid::Joystick::R_STICK_H_AXIS, cnoid::Joystick::L_STICK_V_AXIS, cnoid::Joystick::L_STICK_H_AXIS },
@@ -176,16 +182,18 @@ bool SampleDroneFlightController::control()
 
     static const double P[] = {  1.000, 0.1,  0.1,  0.010 };
     static const double D[] = {  1.000, 0.1,  0.1,  0.001 };
-    static const double X[] = { -0.002, 1.0, -1.0, -1.000 };
+    static const double X[] = { -0.002, -2.0, -2.0, -1.000 };
 
     static const double KP[] = {  1.0,  1.0 };
     static const double KD[] = {  1.0,  1.0 };
-    static const double KX[] = { -2.0, -2.0 };
 
-    joyState.axes[0] = command.linear.z * -1.0;
-    joyState.axes[1] = command.linear.y * -1.0;
-    joyState.axes[2] = command.linear.x * -1.0;
-    joyState.axes[3] = command.angular.z * -1.0;
+    // vel[z, r, p, y]
+    static double vel[] = { 10.0, 20.0, 20.0, 1.0 };
+
+    joyState.axes[0] = command.linear.z / vel[0] * -1.0;
+    joyState.axes[1] = command.linear.y / vel[1] * -1.0;
+    joyState.axes[2] = command.linear.x / vel[2] * -1.0;
+    joyState.axes[3] = command.angular.z / vel[3] * -1.0;
 
     double pos[4];
     for(int i = 0; i < 4; ++i) {
@@ -207,7 +215,7 @@ bool SampleDroneFlightController::control()
                 zref[i] += X[i] * pos[i];
             } else {
                 int j = i - 1;
-                dxyref[j] = KX[j] * pos[i];
+                dxyref[j] = X[i] * pos[i];
                 zref[i] = KP[j] * (dxyref[j] - dxy_local[1 - j]) + KD[j] * (0.0 - ddxy_local[1 - j]);
             }
             if(i == 1) {
@@ -250,16 +258,29 @@ bool SampleDroneFlightController::control()
     }
     double percentage = time / durationn * 100.0;
 
-    auto message = sensor_msgs::msg::BatteryState();
-    message.voltage = 15.0;
-    message.percentage = percentage > 0.0 ? percentage : 0.0;
-    publisher->publish(message);
+    {
+        std::lock_guard<std::mutex> lock(batteryMutex);
+        auto message = sensor_msgs::msg::BatteryState();
+        message.voltage = 15.0;
+        message.percentage = percentage > 0.0 ? percentage : 0.0;
+        publisher->publish(message);       
+    }
 
     if(percentage <= 0.0) {
         is_powered_on = false;
     }
 
     return true;
+}
+
+void SampleDroneFlightController::unconfigure()
+{
+   if(executor) {
+      executor->cancel();
+      executorThread.join();
+      executor->remove_node(node);
+      executor.reset();
+   }
 }
 
 cnoid::Vector4 SampleDroneFlightController::getZRPY()
