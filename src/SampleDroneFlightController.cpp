@@ -5,14 +5,12 @@
 
 #include <cnoid/AccelerationSensor>
 #include <cnoid/EigenUtil>
-#include <cnoid/Joystick>
 #include <cnoid/SimpleController>
 #include <cnoid/RateGyroSensor>
 #include <cnoid/Rotor>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/battery_state.hpp>
-#include <sensor_msgs/msg/joy.hpp>
 #include <memory>
 #include <thread>
 #include <mutex>
@@ -26,8 +24,6 @@ public:
     virtual void unconfigure() override;
 
 private:
-    enum ControlMode { Mode1, Mode2, Twist };
-
     cnoid::SimpleControllerIO* io;
     cnoid::BodyPtr ioBody;
     cnoid::DeviceList<cnoid::Rotor> rotors;
@@ -44,9 +40,6 @@ private:
     cnoid::Vector2 dxyref;
     cnoid::Vector2 dxyprev;
 
-    cnoid::Joystick joystick;
-
-    int currentMode;
     double timeStep;
     double time;
     double durationn;
@@ -56,7 +49,6 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr publisher;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr subscription;
     geometry_msgs::msg::Twist command;
-    sensor_msgs::msg::Joy joyState;
     rclcpp::executors::StaticSingleThreadedExecutor::UniquePtr executor;
     std::thread executorThread;
     std::mutex commandMutex;
@@ -71,9 +63,6 @@ CNOID_IMPLEMENT_SIMPLE_CONTROLLER_FACTORY(SampleDroneFlightController)
 bool SampleDroneFlightController::configure(cnoid::SimpleControllerConfig* config)
 {
     node = std::make_shared<rclcpp::Node>(config->controllerName());
-
-    joyState.axes.resize(cnoid::Joystick::NUM_STD_AXES);
-    joyState.buttons.resize(cnoid::Joystick::NUM_STD_BUTTONS);
 
     publisher = node->create_publisher<sensor_msgs::msg::BatteryState>("/battery_status", 10);
     subscription = node->create_subscription<geometry_msgs::msg::Twist>(
@@ -98,18 +87,8 @@ bool SampleDroneFlightController::initialize(cnoid::SimpleControllerIO* io)
     gyroSensor = ioBody->findDevice<cnoid::RateGyroSensor>("GyroSensor");
     accSensor = ioBody->findDevice<cnoid::AccelerationSensor>("AccSensor");
     is_powered_on = true;
-    currentMode = Twist;
 
-    for(auto opt : io->options()) {
-        if(opt == "mode1") {
-            currentMode = Mode1;
-        }
-        if(opt == "mode2") {
-            currentMode = Mode2;
-        }
-    }
-
-    io->enableInput(ioBody->rootLink(), LINK_POSITION);
+    io->enableInput(ioBody->rootLink(), cnoid::Link::LinkPosition);
     io->enableInput(gyroSensor);
     io->enableInput(accSensor);
 
@@ -130,22 +109,6 @@ bool SampleDroneFlightController::initialize(cnoid::SimpleControllerIO* io)
 
 bool SampleDroneFlightController::control()
 {
-    joystick.readCurrentState();
-
-    static const int modeID[][4] = {
-        { cnoid::Joystick::R_STICK_V_AXIS, cnoid::Joystick::R_STICK_H_AXIS, cnoid::Joystick::L_STICK_V_AXIS, cnoid::Joystick::L_STICK_H_AXIS },
-        { cnoid::Joystick::L_STICK_V_AXIS, cnoid::Joystick::R_STICK_H_AXIS, cnoid::Joystick::R_STICK_V_AXIS, cnoid::Joystick::L_STICK_H_AXIS }
-    };
-
-    int axisID[4] = { 0 };
-    for(int i = 0; i < 4; ++i) {
-        if(currentMode == Mode1) {
-            axisID[i] = modeID[0][i];
-        } else if(currentMode == Mode2) {
-            axisID[i] = modeID[1][i];
-        }            
-    }
-
     cnoid::Vector4 f = cnoid::Vector4::Zero();
     cnoid::Vector4 z = getZRPY();
     cnoid::Vector4 dz = (z - zprev) / timeStep;
@@ -180,29 +143,33 @@ bool SampleDroneFlightController::control()
         dzref[0] = 0.0;
     }
 
-    static const double P[] = {  1.000, 0.1,  0.1,  0.010 };
-    static const double D[] = {  1.000, 0.1,  0.1,  0.001 };
-    static const double X[] = { -0.002, -2.0, -2.0, -1.000 };
+    static const double P[] = {  1.000,  0.1,  0.1,  0.010 };
+    static const double D[] = {  1.000,  0.1,  0.1,  0.001 };
+    static const double X[] = { -0.002, -2.0, -2.0, -1.047 };
 
     static const double KP[] = {  1.0,  1.0 };
     static const double KD[] = {  1.0,  1.0 };
 
     // vel[z, r, p, y]
-    static double vel[] = { 10.0, 20.0, 20.0, 1.0 };
+    static double vel[] = { 2.0, 2.0, 2.0, 1.047 };
 
-    joyState.axes[0] = command.linear.z / vel[0] * -1.0;
-    joyState.axes[1] = command.linear.y / vel[1] * -1.0;
-    joyState.axes[2] = command.linear.x / vel[2] * -1.0;
-    joyState.axes[3] = command.angular.z / vel[3] * -1.0;
+    double val[4];
+    val[0] = command.linear.z / vel[0] * -1.0;
+    val[1] = command.linear.y / vel[1] * -1.0;
+    val[2] = command.linear.x / vel[2] * -1.0;
+    val[3] = command.angular.z / vel[3] * -1.0;
+
+    for(int i = 0; i < 4; ++i) {
+        if(val[i] > 0.0) {
+            val[i] = val[i] > vel[i] ? vel[i] : val[i];
+        } else if(val[i] < 0.0) {
+            val[i] = val[i] < -vel[i] ? -vel[i] : val[i];
+        }
+    }
 
     double pos[4];
     for(int i = 0; i < 4; ++i) {
-        if(currentMode == Twist) {
-            pos[i] = joyState.axes[i];
-        } else {
-            pos[i] = joystick.getPosition(axisID[i]);
-        }
-
+        pos[i] = val[i];
         if(fabs(pos[i]) < 0.2) {
             pos[i] = 0.0;
         }

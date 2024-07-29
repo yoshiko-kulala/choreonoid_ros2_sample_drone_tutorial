@@ -79,7 +79,7 @@ bool TwistPublisherController::control()
     }
 
     // vel[z, r, p, y]
-    static double vel[] = { 10.0, 20.0, 20.0, 1.0 };
+    static double vel[] = { 2.0, 2.0, 2.0, 1.047 };
 
     {
         std::lock_guard<std::mutex> lock(commandMutex);
