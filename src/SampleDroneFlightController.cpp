@@ -153,18 +153,14 @@ bool SampleDroneFlightController::control()
     // vel[z, r, p, y]
     static double vel[] = { 2.0, 2.0, 2.0, 1.047 };
 
-    double val[4];
-    val[0] = command.linear.z / vel[0] * -1.0;
-    val[1] = command.linear.y / vel[1] * -1.0;
-    val[2] = command.linear.x / vel[2] * -1.0;
-    val[3] = command.angular.z / vel[3] * -1.0;
-
+    double val[] = { command.linear.z, command.linear.y, command.linear.x, command.angular.z };
     for(int i = 0; i < 4; ++i) {
         if(val[i] > 0.0) {
             val[i] = val[i] > vel[i] ? vel[i] : val[i];
         } else if(val[i] < 0.0) {
             val[i] = val[i] < -vel[i] ? -vel[i] : val[i];
         }
+        val[i] = val[i] / vel[i] * -1.0;
     }
 
     double pos[4];
