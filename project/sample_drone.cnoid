@@ -325,8 +325,6 @@ toolbars:
     snapDistance: 0.025
     penetrationBlockDepth: 0.0005
     lazyCollisionDetectionMode: true
-  "IntervalStarterBar":
-    interval_time: 5
 Body:
   "BodySelectionManager":
     current_body_item: 2
@@ -357,8 +355,6 @@ Body:
     inputFrameRate: 200
     isOutputFrameRateSpecified: false
     outputFrameRate: 200
-TaskCreator:
-  "TaskCreator": { }
 viewAreas:
   -
     type: embedded
