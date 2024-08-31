@@ -16,9 +16,11 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
 find_package(choreonoid REQUIRED)
+
 set(CMAKE_CXX_STANDARD ${CHOREONOID_CXX_STANDARD})
 include_directories(${CHOREONOID_INCLUDE_DIRS})
 link_directories(${CHOREONOID_LIBRARY_DIRS})
+
 add_subdirectory(src)
 
 if(BUILD_TESTING)
