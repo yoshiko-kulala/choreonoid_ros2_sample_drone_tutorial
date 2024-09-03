@@ -14,7 +14,6 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-
 find_package(choreonoid REQUIRED)
 
 set(CMAKE_CXX_STANDARD ${CHOREONOID_CXX_STANDARD})
@@ -34,6 +33,14 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+add_executable(choreonoid_joy_node src/choreonoid_joy_node.cpp)
+target_link_libraries(choreonoid_joy_node Choreonoid::CnoidUtil)
+ament_target_dependencies(choreonoid_joy_node rclcpp sensor_msgs choreonoid)
+
+install(TARGETS
+  choreonoid_joy_node
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
 
