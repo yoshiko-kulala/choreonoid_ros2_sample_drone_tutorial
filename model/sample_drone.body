@@ -21,22 +21,115 @@ links:
         type: Shape
         geometry: { type: Box, size: [ 0.2, 0.2, 0.09 ] }
         appearance: { material: { diffuse: [ 0.8, 0.8, 0.8 ] } }
+
+      # 正面（黒色カメラ）
       -
         type: Camera
         name: FrontCamera
         translation: [ 0.1, 0, 0 ]
-        rotation: [ [ 1, 0, 0, 90 ], [ 0, 1, 0, -90 ] ]        
-        format: COLOR
-        field_of_view: 62
-        near_clip_distance: 0.02
-        width: 640
-        height: 480
-        frame_rate: 30
+        rotation: [ [ 1, 0, 0, 90 ], [ 0, 1, 0, -90 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
         elements:
           - 
             type: Shape
             geometry: { type: Box, size: [ 0.06, 0.06, 0.02 ] }
-            appearance: { material: { diffuse: [ 0.2, 0.2, 0.2 ] } }
+            appearance: { material: { diffuse: [ 0, 0, 0 ] } } # 黒色
+      -
+        type: SpotLight
+        name: FrontLight
+        translation: [ 0.1, 0, 0 ]
+        direction: [ 1, 0, 0 ] # 正面向き
+        beamWidth: 36
+        cutOffAngle: 40
+        cutOffExponent: 6
+        attenuation: [ 1, 0, 0.01 ]
+
+      # 右側（灰色カメラ）
+      -
+        type: Camera
+        name: RightCamera
+        translation: [ 0, -0.1, 0 ]
+        rotation: [ [ 0, 1, 0, 90 ], [ 1, 0, 0, -90 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
+        elements:
+          - 
+            type: Shape
+            geometry: { type: Box, size: [ 0.06, 0.06, 0.02 ] }
+            appearance: { material: { diffuse: [ 0.5, 0.5, 0.5 ] } } # 灰色
+      -
+        type: SpotLight
+        name: RightLight
+        translation: [ 0, -0.1, 0 ]
+        direction: [ 0, -1, 0 ] # 右向き
+        beamWidth: 36
+        cutOffAngle: 40
+        cutOffExponent: 6
+        attenuation: [ 1, 0, 0.01 ]
+
+      # 左側（灰色カメラ）
+      -
+        type: Camera
+        name: LeftCamera
+        translation: [ 0, 0.1, 0 ]
+        rotation: [ [ 0, 1, 0, -90 ], [ 1, 0, 0, 90 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
+        elements:
+          - 
+            type: Shape
+            geometry: { type: Box, size: [ 0.06, 0.06, 0.02 ] }
+            appearance: { material: { diffuse: [ 0.5, 0.5, 0.5 ] } } # 灰色
+      -
+        type: SpotLight
+        name: LeftLight
+        translation: [ 0, 0.1, 0 ]
+        direction: [ 0, 1, 0 ] # 左向き
+        beamWidth: 36
+        cutOffAngle: 40
+        cutOffExponent: 6
+        attenuation: [ 1, 0, 0.01 ]
+
+      # 後方（灰色カメラ）
+      -
+        type: Camera
+        name: BackCamera
+        translation: [ -0.1, 0, 0 ]
+        rotation: [ [ 1, 0, 0, -90 ], [ 0, 1, 0, 90 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
+        elements:
+          - 
+            type: Shape
+            geometry: { type: Box, size: [ 0.06, 0.06, 0.02 ] }
+            appearance: { material: { diffuse: [ 0.5, 0.5, 0.5 ] } } # 灰色
+      -
+        type: SpotLight
+        name: BackLight
+        translation: [ -0.1, 0, 0 ]
+        direction: [ -1, 0, 0 ] # 後ろ向き
+        beamWidth: 36
+        cutOffAngle: 40
+        cutOffExponent: 6
+        attenuation: [ 1, 0, 0.01 ]
+
       -
         type: RateGyroSensor
         name: GyroSensor
