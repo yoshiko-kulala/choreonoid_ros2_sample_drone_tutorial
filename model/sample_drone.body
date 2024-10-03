@@ -130,6 +130,50 @@ links:
         cutOffExponent: 6
         attenuation: [ 1, 0, 0.01 ]
 
+      # 上向き（当たり判定と重量なし）
+      -
+        type: Camera
+        name: UpCamera
+        translation: [ 0, 0, 0.05 ]
+        rotation: [ [ 0, 1, 0, 180 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
+      -
+        type: SpotLight
+        name: UpLight
+        translation: [ 0, 0, 0.05 ]
+        direction: [ 0, 0, 1 ] # 上向き
+        beamWidth: 36
+        cutOffAngle: 40
+        cutOffExponent: 6
+        attenuation: [ 1, 0, 0.01 ]
+
+      # 下向き（当たり判定と重量なし）
+      -
+        type: Camera
+        name: DownCamera
+        translation: [ 0, 0, -0.05 ]
+        rotation: [ [ 0, 1, 0, 0 ] ]
+        format: COLOR_DEPTH
+        fieldOfView: 62
+        width: 320
+        height: 240
+        frameRate: 30
+        on: true
+      -
+        type: SpotLight
+        name: DownLight
+        translation: [ 0, 0, -0.05 ]
+        direction: [ 0, 0, -1 ] # 下向き
+        beamWidth: 36
+        cutOffAngle: 60
+        cutOffExponent: 10
+        attenuation: [ 1, 0, 0.01 ]
+
       -
         type: RateGyroSensor
         name: GyroSensor
